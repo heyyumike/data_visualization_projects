@@ -60,12 +60,13 @@ second_table[5,] <- data.frame(position = "43",
                                homicide_rate = "35.16")
 
 # combining the two tables together and excluding blank row
-crime_statistics_data <-  first_table %>% 
+crime_statistics_data <- first_table %>% 
   rbind(second_table) %>%
   filter(position != "") %>%
   mutate(homicides = gsub(pattern = ",", replacement = "", x = homicides),
          population = gsub(pattern = ",", replacement = "", x = population),
-         is_mexico = ifelse(country == "México", "yes", "no")) %>%
+         is_mexico = ifelse(country == "México", "yes", "no"),
+         city = trimws(gsub(pattern = "\\(AM\\)", replacement = "", x = city), which = "both")) %>%
   mutate_at(.vars = c("homicides", "population", "homicide_rate"),
             .funs = as.numeric)
 
