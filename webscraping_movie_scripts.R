@@ -31,6 +31,25 @@ count_words <- function(scripts) {
   return(word_counts)
 }
 
+## function that creates a data frame by scraping and counting words off tv scripts from springfieldspringfield.co.uk and joining it with runtime data from IMDB 
+create_data <- function(script_urls, tv_series_name, episodes_data) {
+  tv_series_scripts <- scrape_webpages(script_urls)
+  
+  tv_script_wordcounts <- count_words(tv_series_scripts) %>%
+    unlist() %>% data.frame() %>%
+    rownames_to_column("season_episode") %>%
+    rename(word_count = ".") %>%
+    mutate(season_episode = str_sub(season_episode, -6, -1),
+           tv_series = tv_series_name)
+  
+  tv_series_full_data <- tv_script_wordcounts %>%
+    left_join(episodes_data, by = c("tv_series", "season_episode")) %>%
+    mutate(words_per_minute = word_count / runtime) %>%
+    select(tv_series, season_episode, word_count, runtime, words_per_minute)
+  
+  return(tv_series_full_data)
+}
+
 # runtime data for all TV Series and their respective seasons/episodes from IMDB
 ## table with TV shows information (specifically we are interested in tconst since we need that for each episodes runtime and their parentTconst)
 tv_series_data <- read_tsv("title.basics.tsv") %>%
@@ -65,19 +84,7 @@ breaking_bad_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_epi
                        paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
                        paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s05e", str_pad(1:16, pad = 0,width = 2 , "left")))
 
-breaking_bad_scripts <- scrape_webpages(breaking_bad_urls)
-
-breaking_bad_script_wordcounts <- count_words(breaking_bad_scripts) %>%
-  unlist() %>% data.frame() %>%
-  rownames_to_column("season_episode") %>%
-  rename(word_count = ".") %>%
-  mutate(season_episode = str_sub(season_episode, -6, -1), 
-         tv_series = "Breaking Bad")
-
-breaking_bad_full_data <- breaking_bad_script_wordcounts %>% 
-  left_join(tv_series_episodes_data, by = c("tv_series", "season_episode")) %>%
-  mutate(words_per_minute = word_count / runtime) %>%
-  select(tv_series, season_episode, word_count, runtime, words_per_minute)
+breaking_bad_full_data <- create_data(breaking_bad_urls, "Breaking Bad", tv_series_episodes_data)
 
 # THE SOPRANOS
 the_sopranos_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
@@ -87,19 +94,7 @@ the_sopranos_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_epi
                        paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s05e", str_pad(1:13, pad = 0,width = 2 , "left")),
                        paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s06e", str_pad(1:21, pad = 0,width = 2 , "left")))
 
-the_sopranos_scripts <- scrape_webpages(the_sopranos_urls)
-
-the_sopranos_script_wordcounts <- count_words(the_sopranos_scripts) %>%
-  unlist() %>% data.frame() %>%
-  rownames_to_column("season_episode") %>%
-  rename(word_count = ".") %>%
-  mutate(season_episode = str_sub(season_episode, -6, -1),
-         tv_series = "The Sopranos")
-
-the_sopranos_full_data <- the_sopranos_script_wordcounts %>% 
-  left_join(tv_series_episodes_data, by = c("tv_series", "season_episode")) %>%
-  mutate(words_per_minute = word_count / runtime) %>%
-  select(tv_series, season_episode, word_count, runtime, words_per_minute)
+the_sopranos_full_data <- create_data(the_sopranos_urls, "The Sopranos", tv_series_episodes_data)
 
 # MAD MEN
 mad_men_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
@@ -110,19 +105,7 @@ mad_men_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_
                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s06e", str_pad(1:13, pad = 0,width = 2 , "left")),
                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s07e", str_pad(1:14, pad = 0,width = 2 , "left")))
 
-mad_men_scripts <- scrape_webpages(mad_men_urls)
-
-mad_men_script_wordcounts <- count_words(mad_men_scripts) %>%
-  unlist() %>% data.frame() %>%
-  rownames_to_column("season_episode") %>%
-  rename(word_count = ".") %>%
-  mutate(season_episode = str_sub(season_episode, -6, -1),
-         tv_series = "Mad Men")
-
-mad_men_full_data <- mad_men_script_wordcounts %>% 
-  left_join(tv_series_episodes_data, by = c("tv_series", "season_episode")) %>%
-  mutate(words_per_minute = word_count / runtime) %>%
-  select(tv_series, season_episode, word_count, runtime, words_per_minute)
+mad_men_full_data <- create_data(mad_men_urls, "Mad Men", tv_series_episodes_data)
 
 # THE WIRE
 the_wire_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
@@ -131,19 +114,7 @@ the_wire_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode
                    paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
                    paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s05e", str_pad(1:10, pad = 0,width = 2 , "left")))
 
-the_wire_scripts <- scrape_webpages(the_wire_urls)
-
-the_wire_script_wordcounts <- count_words(the_wire_scripts) %>%
-  unlist() %>% data.frame() %>%
-  rownames_to_column("season_episode") %>%
-  rename(word_count = ".") %>%
-  mutate(season_episode = str_sub(season_episode, -6, -1),
-         tv_series = "The Wire")
-
-the_wire_full_data <- the_wire_script_wordcounts %>% 
-  left_join(tv_series_episodes_data, by = c("tv_series", "season_episode")) %>%
-  mutate(words_per_minute = word_count / runtime) %>%
-  select(tv_series, season_episode, word_count, runtime, words_per_minute)
+the_wire_full_data <- create_data(the_wire_urls, "The Wire", tv_series_episodes_data)
 
 # SUCCESSION
 succession_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s01e", str_pad(1:10, pad = 0,width = 2 , "left")),
@@ -151,19 +122,32 @@ succession_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episo
                      paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s03e", str_pad(1:9, pad = 0,width = 2 , "left")),
                      paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s04e", str_pad(1:10, pad = 0,width = 2 , "left")))
 
-succession_scripts <- scrape_webpages(succession_urls)
+succession_full_data <- create_data(succession_urls, "Succession", tv_series_episodes_data)
 
-succession_script_wordcounts <- count_words(succession_scripts) %>%
-  unlist() %>% data.frame() %>%
-  rownames_to_column("season_episode") %>%
-  rename(word_count = ".") %>%
-  mutate(season_episode = str_sub(season_episode, -6, -1),
-         tv_series = "Succession")
-
-succession_full_data <- succession_script_wordcounts %>% 
-  left_join(tv_series_episodes_data, by = c("tv_series", "season_episode")) %>%
-  mutate(words_per_minute = word_count / runtime) %>%
-  select(tv_series, season_episode, word_count, runtime, words_per_minute)
+# GRAPHING IT ALL OUT
+# graphs
+breaking_bad_full_data %>% 
+  bind_rows(the_sopranos_full_data, mad_men_full_data, the_wire_full_data, succession_full_data) %>%
+  ggplot(aes(x = words_per_minute, y = fct_reorder(tv_series, words_per_minute, median), fill = tv_series)) +
+  geom_boxplot(outlier.shape = NA, width = 0.25, alpha = 0.5) +
+  geom_jitter(aes(color = tv_series), size = 5, alpha = 0.5, shape = 19, height = 0.2) +
+  scale_x_continuous(limits = c(0,175), breaks = seq(0,175,25), name = "Words Per Minute") +
+  ylab("") +
+  theme_minimal() +
+  guides(fill = "none", color = "none") + 
+  labs(
+    title = "<strong style='font-size:36pt'>The Wordiness of Prestige TV Dramas</strong><br><br>
+    <span style='font-size:14pt'>Each dot represents the words per minute of an episode of the corresponding show</span>",
+    x = "", y = ""
+  ) +
+  theme(panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_line(color = "#eeeeee",),
+        panel.grid.minor.x = element_blank(),
+        axis.text.y = element_text(size = 24),
+        axis.text.x = element_text(size = 24),
+        axis.title.x = element_text(size = 24),
+        plot.title = element_markdown(lineheight = 0.25))
 
 
 # MISCELLANEOUS CODE
@@ -198,10 +182,4 @@ the_sopranos_episode_runtime <- the_sopranos_episode_runtime %>%
   mutate(tv_series = "The Sopranos", season_episode = tolower(season_episode)) %>%
   select(runtime, season_episode, tv_series)
 
-# graphs
-breaking_bad_full_data %>% 
-  bind_rows(the_sopranos_full_data, mad_men_full_data, the_wire_full_data, succession_full_data) %>%
-  ggplot(aes(x = words_per_minute, y = fct_reorder(tv_series, words_per_minute, median), fill = tv_series)) +
-  geom_boxplot() + geom_jitter() +
-  scale_x_continuous(limits = c(0,175), breaks = seq(0,175,25))
 
