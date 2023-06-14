@@ -51,6 +51,20 @@ create_data <- function(script_urls, tv_series_name, episodes_data) {
   return(tv_series_full_data)
 }
 
+## function for generating the URLs of webpages with TV episode scripts that we will be scraping from
+generate_episode_urls <- function(seasons, episodes, tv_show) {
+  show_urls <- c()
+  
+  for (season in seasons) {
+    for (episode in 1:episodes[season]) {
+      url <- paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=", tv_show, "&episode=s", str_pad(season, pad = 0, width = 2, "left"), "e", str_pad(episode, pad = 0, width = 2, "left"))
+      show_urls <- c(show_urls, url)
+    }
+  }
+  
+  return(show_urls)
+}
+
 # runtime data for all TV Series and their respective seasons/episodes from IMDB
 ## table with TV shows information (specifically we are interested in tconst since we need that for each episodes runtime and their parentTconst)
 tv_series_data <- read_tsv("title.basics.tsv") %>%
@@ -81,98 +95,52 @@ tv_series_episodes_data <- episodes_data %>%
 
 # TV SHOWS
 ## BREAKING BAD
-breaking_bad_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s01e", str_pad(1:7, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s02e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s03e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=breaking-bad&episode=s05e", str_pad(1:16, pad = 0,width = 2 , "left")))
+breaking_bad_urls <- generate_episode_urls(seasons = seq(1,5,1), episodes = c(7,13,13,13,16), tv_show = "breaking-bad")
 
 breaking_bad_full_data <- create_data(breaking_bad_urls, "Breaking Bad", tv_series_episodes_data)
 
 ## THE SOPRANOS
-the_sopranos_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s02e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s03e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s05e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                       paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-sopranos&episode=s06e", str_pad(1:21, pad = 0,width = 2 , "left")))
+the_sopranos_urls <- generate_episode_urls(seasons = seq(1,6,1), episodes = c(13,13,13,13,13,21), tv_show = "the-sopranos")
 
 the_sopranos_full_data <- create_data(the_sopranos_urls, "The Sopranos", tv_series_episodes_data)
 
 ## MAD MEN
-mad_men_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s02e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s03e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s05e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s06e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                  paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=mad-men&episode=s07e", str_pad(1:14, pad = 0,width = 2 , "left")))
+mad_men_urls <- generate_episode_urls(seasons = seq(1,7,1), episodes = c(13,13,13,13,13,13,14), tv_show = "mad-men")
 
 mad_men_full_data <- create_data(mad_men_urls, "Mad Men", tv_series_episodes_data)
 
 ## THE WIRE
-the_wire_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s02e", str_pad(1:12, pad = 0,width = 2 , "left")),
-                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s03e", str_pad(1:12, pad = 0,width = 2 , "left")),
-                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                   paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=the-wire&episode=s05e", str_pad(1:10, pad = 0,width = 2 , "left")))
+the_wire_urls <- generate_episode_urls(seasons = seq(1,5,1), episodes = c(13,12,12,13,10), tv_show = "the-wire")
 
 the_wire_full_data <- create_data(the_wire_urls, "The Wire", tv_series_episodes_data)
 
 ## SUCCESSION
-succession_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s01e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                     paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s02e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                     paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s03e", str_pad(1:9, pad = 0,width = 2 , "left")),
-                     paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=succession-2018&episode=s04e", str_pad(1:10, pad = 0,width = 2 , "left")))
+succession_urls <- generate_episode_urls(seasons = seq(1,4,1), episodes = c(10,10,9,10), tv_show = "succession-2018")
 
 succession_full_data <- create_data(succession_urls, "Succession", tv_series_episodes_data)
 
 ## HOUSE OF CARDS
-house_of_cards_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s01e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                         paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s02e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                         paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s03e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                         paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s04e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                         paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s05e", str_pad(1:13, pad = 0,width = 2 , "left")),
-                         paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=house-of-cards-2013&episode=s06e", str_pad(1:8, pad = 0,width = 2 , "left")))
+house_of_cards_urls <- generate_episode_urls(seasons = seq(1,6,1), episodes = c(13,13,13,13,13,8), tv_show = "house-of-cards-2013")
 
 house_of_cards_full_data <- create_data(house_of_cards_urls, "House of Cards", tv_series_episodes_data)
 
 ## OZARK
-ozark_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=ozark-2017&episode=s01e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=ozark-2017&episode=s02e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=ozark-2017&episode=s03e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=ozark-2017&episode=s04e", str_pad(1:14, pad = 0,width = 2 , "left")))
+ozark_urls <- generate_episode_urls(seasons = seq(1,4,1), episodes = c(10,10,10,14), tv_show = "ozark-2017")
 
 ozark_full_data <- create_data(ozark_urls, "Ozark", tv_series_episodes_data)
 
 ## BETTER CAUL SAUL
-better_call_saul_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s01e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                           paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s02e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                           paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s03e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                           paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s04e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                           paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s05e", str_pad(1:10, pad = 0,width = 2 , "left")),
-                           paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=better-call-saul-2015&episode=s06e", str_pad(1:13, pad = 0,width = 2 , "left")))
+better_call_saul_urls <- generate_episode_urls(seasons = seq(1,6,1), episodes = c(10,10,10,10,10,13), tv_show = "better-call-saul-2015")
 
 better_call_saul_full_data <- create_data(better_call_saul_urls, "Better Call Saul", tv_series_episodes_data)
 
 ## SUITS
-suits_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s01e", str_pad(1:12, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s02e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s03e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s04e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s05e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s06e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s07e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s08e", str_pad(1:16, pad = 0,width = 2 , "left")),
-                paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=suits&episode=s09e", str_pad(1:10, pad = 0,width = 2 , "left")))
+suits_urls <- generate_episode_urls(seasons = seq(1,9,1), episodes = c(12,16,16,16,16,16,16,16,10), tv_show = "suits")
 
 suits_full_data <- create_data(suits_urls, "Suits", tv_series_episodes_data)
 
 ## STRANGER THINGS
-stranger_things_urls <- c(paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=stranger-things-2016&episode=s01e", str_pad(1:8, pad = 0,width = 2 , "left")),
-                          paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=stranger-things-2016&episode=s02e", str_pad(1:9, pad = 0,width = 2 , "left")),
-                          paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=stranger-things-2016&episode=s03e", str_pad(1:8, pad = 0,width = 2 , "left")),
-                          paste0("https://www.springfieldspringfield.co.uk/view_episode_scripts.php?tv-show=stranger-things-2016&episode=s04e", str_pad(1:9, pad = 0,width = 2 , "left")))
+stranger_things_urls <- generate_episode_urls(seasons = seq(1,4,1), episodes = c(8,9,8,9), tv_show = "stranger-things-2016")
 
 stranger_things_full_data <- create_data(stranger_things_urls, "Stranger Things", tv_series_episodes_data)
 
