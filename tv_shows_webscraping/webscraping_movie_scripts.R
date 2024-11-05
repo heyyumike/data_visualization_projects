@@ -2,6 +2,8 @@ library(tidyverse)
 library(ggtext)
 library(rvest)
 
+# this script will scrap movie scripts from all episodes of a show and generate a visualization for word count
+
 # FUNCTIONS
 ## function to scrap movie script from website
 scrape_webpages <- function(urls) {
