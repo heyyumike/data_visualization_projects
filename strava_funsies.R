@@ -6,8 +6,8 @@ library(grid)
 library(ggtext)
 
 # initiate strava API instance based on user-based credentials
-strava_key <- KEY
-strava_secret <- SECRET
+strava_key <- 134962
+strava_secret <- 'ebb7e8db872392f704df01576cb08b64b50c4dfb'
 
 app <- oauth_app("strava", strava_key, strava_secret)
 
@@ -89,6 +89,7 @@ all_activities_data %>%
   annotate("text", x = as.POSIXct("2025-01-16"), y = 289, label = "Kaiser\nHalf Marathon", size = 3.5, fontface = "bold") +
   theme(plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
         panel.background = element_rect(fill = "floralwhite", color = NA),
+        text = element_text(size = 16),
         axis.title.x = element_blank(),
         axis.text = element_text(face = "bold", color = "black"),
         plot.title = element_markdown(lineheight = 1.1),
@@ -97,8 +98,8 @@ all_activities_data %>%
         panel.grid.major.y = element_line(color = "lightgrey", size = 0.2)) +
   labs(
     fill = "",
-    title = "<strong style='font-size:16pt'>Cumulative Distance</strong><br>
-           <span style='font-size:12pt'>Cumulative distance with arrows indicating key races/breaks in running (color-coded as <strong style='color:#6A5ACD;'>injuries</strong>, 
+    title = "<strong style='font-size:20pt'>Cumulative Distance</strong><br>
+           <span style='font-size:16pt'>Cumulative distance with arrows indicating key races/breaks in running (color-coded as <strong style='color:#6A5ACD;'>injuries</strong>, 
            <strong style='color:#808000;'>PTO/vacation</strong>, 
            and <strong style='color:#B7410E;'>races</strong>)</span>",
     x = "",
@@ -115,12 +116,13 @@ all_activities_data %>%
   theme(
     plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
     legend.background = element_rect(fill = "floralwhite", color = "floralwhite"),
+    text = element_text(size = 16),
     panel.grid.major.x = element_blank(),
     panel.grid.major.y = element_blank(),
     strip.background = element_rect(fill = "lightblue", color = NA),
     strip.text = element_text(face = "bold", color = "black"),
     axis.text = element_text(face = "bold", color = "black"),
-    plot.title = element_text(size = 16, face = "bold")
+    plot.title = element_text(size = 20, face = "bold")
   ) +
   facet_wrap(~day_of_week, ncol = 7) +
   xlab("") +
@@ -142,10 +144,11 @@ avg_pace_by_run_type_plot <- all_activities_data %>%
   geom_jitter(alpha = 0.75, size = 4, shape = 21, show.legend = FALSE) +
   scale_fill_manual(values = c("FALSE" = "black", "TRUE" = "red")) +
   scale_y_continuous(name = "Avg. Pace Per Mile", labels = seconds_to_mins_secs, limits = c(450, 660), breaks = seq(450, 660, 30)) +
-  scale_x_datetime(date_labels = "%b %Y", date_breaks = "1 month") +
+  scale_x_datetime(date_labels = "%b %Y", date_breaks = "2 month") +
   theme(
     plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
     panel.grid.major.x = element_blank(),
+    text = element_text(size = 16),
     panel.grid.major.y = element_blank(),
     strip.background = element_rect(fill = "lightblue", color = NA),
     strip.text = element_text(face = "bold", color = "black"),
@@ -156,8 +159,8 @@ avg_pace_by_run_type_plot <- all_activities_data %>%
   facet_wrap(~run_type, ncol = 3) +
   labs(
     fill = "",
-    title = "<strong style='font-size:16pt'>Avg. Pace Per Mile by Run Type Over Time</strong><br>
-           <span style='font-size:12pt'>Each point represents the average pace per mile of a running activity. Points highlighted in <strong style='color:#FF0000;'>red</strong> indicate races and their respective average pace per mile</span>",
+    title = "<strong style='font-size:20pt'>Avg. Pace Per Mile by Run Type Over Time</strong><br>
+           <span style='font-size:16pt'>Each point represents the average pace per mile of a running activity. Points highlighted in <strong style='color:#FF0000;'>red</strong> indicate races and their respective average pace per mile</span>",
     x = "",
     caption = "Source: Strava API"
   )
@@ -165,7 +168,7 @@ avg_pace_by_run_type_plot <- all_activities_data %>%
 # data frame with only data for races
 only_races_data <- all_activities_data %>% filter(is_race == TRUE)
 avg_pace_plot_with_race_annotations <- avg_pace_by_run_type_plot +
-  geom_text(data = only_races_data, aes(y = c(587, 546, 543), label = c("Monterey Bay Half Marathon", "Silicon Valley Turkey Trot", "Kaiser\nHalf\nMarathon")), color = "red", size = 3)
+  geom_text(data = only_races_data, aes(y = c(587, 546, 543), label = c("Monterey Bay Half Marathon", "Silicon Valley Turkey Trot", "Kaiser\nHalf\nMarathon")), color = "red", size = 3.5)
 
 # calculate avg. paces for each run type for annotation purposes
 avg_pace_by_run_type <- all_activities_data %>%
@@ -177,10 +180,10 @@ avg_pace_by_run_type <- all_activities_data %>%
 
 # adding in annotations with avg. pace per run type
 avg_pace_plot_with_race_annotations +
-  geom_hline(data = avg_pace_by_run_type, aes(yintercept = converted_avg_pace_per_miles), color = "maroon", linetype = "dashed", size = 1) +
-  geom_text(data = avg_pace_by_run_type, aes(x= c(as.POSIXct("2024-07-15"), as.POSIXct("2024-12-25"), as.POSIXct("2024-12-25")),
+  geom_hline(data = avg_pace_by_run_type, aes(yintercept = converted_avg_pace_per_miles), color = "maroon", linetype = "dashed", size = 2) +
+  geom_text(data = avg_pace_by_run_type, aes(x= c(as.POSIXct("2024-07-20"), as.POSIXct("2024-12-25"), as.POSIXct("2024-12-25")),
                                              y = converted_avg_pace_per_miles + 3,
-                                             label = paste0("Avg. Pace: ", converted_avg_pace_per_miles)), inherit.aes = FALSE, size = 3, color = "maroon")
+                                             label = paste0("Avg. Pace: ", converted_avg_pace_per_miles)), inherit.aes = FALSE, size = 4, color = "maroon")
 
 # create a calendar with all dates in between first and last day of running journey
 all_dates <- tibble(date = seq(from = min(as.Date(all_activities_data$start_date_local)), to = max(as.Date(all_activities_data$start_date_local)), by = "days"))
@@ -208,8 +211,9 @@ all_dates_data %>%
   theme(plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
         panel.background = element_rect(fill = "floralwhite", color = NA),
         legend.background = element_rect(fill = "floralwhite", color = "floralwhite"),
+        text = element_text(size = 16),
         axis.title.x = element_blank(),
-        plot.title = element_text(size = 16, face = "bold"),
+        plot.title = element_text(size = 20, face = "bold"),
         axis.text = element_text(face = "bold", color = "black")) +
   ylab("Day of Week") +
   ggtitle(label = "Running Activity Frequency Heatmap",
@@ -232,7 +236,9 @@ all_dates_data %>%
   theme(plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
         panel.background = element_rect(fill = "floralwhite", color = NA),
         legend.background = element_rect(fill = "floralwhite", color = "floralwhite"),
-        plot.title = element_text(size = 16, face = "bold"),
+        text = element_text(size = 16),
+        legend.title = element_text(size = 18, face = "bold"),
+        plot.title = element_text(size = 20, face = "bold"),
         axis.text = element_text(face = "bold", color = "black")) +
   ggtitle(label = "Cumulative Distance Over Time by Month",
           subtitle = "Each line represents the progression of running miles accumulated over the course of a month") +
@@ -251,13 +257,14 @@ all_activities_data %>%
   geom_text(aes(label = paste0(run_type, "\n", count, " ", case_when(
     count == 1 ~ "run",
     .default = "runs"
-  ), " (", round(total_distance, digits = 2), " miles)")), position = position_stack(vjust = 0.5), size = 3, fontface = "bold") +
+  ), " (", round(total_distance, digits = 2), " miles)")), position = position_stack(vjust = 0.5), size = 4, fontface = "bold") +
   coord_flip() +
   scale_x_discrete(limits = rev) +
   scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, 10)) +
   theme(plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
         panel.background = element_rect(fill = "floralwhite", color = NA),
-        plot.title = element_text(size = 16, face = "bold"),
+        text = element_text(size = 16),
+        plot.title = element_text(size = 20, face = "bold"),
         axis.text = element_text(face = "bold", color = "black")) +
   ggtitle(label = "Total Number of Runs/Distance Based on Run Distance",
           subtitle = "Overall bar length represents the total number of miles ran for all runs that fall within each distance category. Each bar is further broken out by run type") +
@@ -315,6 +322,7 @@ avg_difference_in_pace_between_splits_data %>%
     plot.background = element_rect(fill = "floralwhite", color = "floralwhite"),
     panel.grid.major.x = element_blank(),
     panel.grid.major.y = element_blank(),
+    text = element_text(size = 16),
     strip.background = element_rect(fill = "lightblue", color = NA),
     strip.text = element_text(face = "bold", color = "black"),
     plot.title = element_markdown(lineheight = 1.1),
@@ -323,8 +331,8 @@ avg_difference_in_pace_between_splits_data %>%
   ) +
   labs(
     fill = "",
-    title = "<strong style='font-size:16pt'>How Much Faster/Slower Am I Running in Between (Mile) Splits?</strong><br>
-           <span style='font-size:12pt'>Each bar represents the average difference in pace per mile between splits (<strong style='color:#00BFC4;'>blue</strong> bars = increase (slower pace) vs.<strong style='color:#F8766D;'>red</strong> bars = decrease (faster pace) in time between splits)  
+    title = "<strong style='font-size:20pt'>How Much Faster/Slower Am I Running in Between (Mile) Splits?</strong><br>
+           <span style='font-size:16pt'>Each bar represents the average difference in pace per mile between splits (<strong style='color:#00BFC4;'>blue</strong> bars = increase (slower pace) vs.<strong style='color:#F8766D;'>red</strong> bars = decrease (faster pace) in time between splits)  
     Further broken out by run type since not all runs are the same</span>",
     x = "Splits",
     caption = "Note: Splits with < 300 meters/0.186 miles were filtered out\nSource: Strava API"
