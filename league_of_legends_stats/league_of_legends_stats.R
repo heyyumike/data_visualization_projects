@@ -15,7 +15,7 @@ library(stringr)
 
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
-api_key      <- ""
+api_key      <- "SECRET"
 game_name    <- "Tickleeeeeee"
 tag_line     <- "420"
 region       <- "americas"
