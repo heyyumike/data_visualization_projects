@@ -15,11 +15,10 @@ library(stringr)
 
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
-api_key      <- "SECRET"
+api_key      <- ""
 game_name    <- "Tickleeeeeee"
 tag_line     <- "420"
 region       <- "americas"
-n_matches    <- 100
 
 # =========================================================
 # RIOT API HELPERS
@@ -57,7 +56,8 @@ get_my_stats <- function(match_id, puuid, region) {
     },
     map_id            = match$info$mapId,
     date              = as.POSIXct(match$info$gameStartTimestamp / 1000, origin = "1970-01-01"),
-    champion          = me$championName,
+    champion_raw      = me$championName,          # raw internal name from the match API (kept for reference/debugging)
+    champion_id       = as.character(me$championId),  # numeric champion id -- join key into Data Dragon
     win               = case_when(
       me$gameEndedInEarlySurrender ~ "Remake",
       me$win ~ "Victory",
@@ -94,12 +94,42 @@ account_url <- sprintf(
 )
 puuid <- riot_get(account_url)$puuid
 
-match_ids_url <- sprintf(
-  "https://%s.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids?start=0&count=%d",
-  region, puuid, n_matches
-)
-match_ids <- riot_get(match_ids_url)
+# 2026 date range in epoch seconds (UTC)
+start_time <- as.numeric(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"))
+end_time   <- as.numeric(as.POSIXct("2026-12-31 23:59:59", tz = "UTC"))
 
+# Page through ALL match IDs in the date range (single calls cap out at 100 results)
+get_all_match_ids <- function(puuid, region, start_time, end_time) {
+  all_ids <- character(0)
+  start <- 0
+  count <- 100
+  
+  repeat {
+    url <- sprintf(
+      paste0(
+        "https://%s.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids",
+        "?startTime=%d&endTime=%d&start=%d&count=%d"
+      ),
+      region, puuid, as.integer(start_time), as.integer(end_time), start, count
+    )
+    batch <- riot_get(url)
+    Sys.sleep(1.2)  # throttle
+    
+    if (length(batch) == 0) break
+    all_ids <- c(all_ids, batch)
+    
+    if (length(batch) < count) break  # last page
+    start <- start + count
+  }
+  
+  all_ids
+}
+
+match_ids <- get_all_match_ids(puuid, region, start_time, end_time)
+length(match_ids)  # sanity check: how many 2026 games you played
+
+# NOTE: kept as `my_last_10` so every function/plot built downstream still works unchanged --
+# this now holds your FULL 2026 match history, not just the last n_matches.
 my_last_10 <- map_dfr(match_ids, get_my_stats, puuid = puuid, region = region)
 
 # =========================================================
@@ -117,26 +147,18 @@ champ_roles <- champ_data$data %>%
                    primary_role = .x$tags[1],
                    icon_url = paste0("https://ddragon.leagueoflegends.com/cdn/", patch, "/img/champion/", .x$id, ".png")))
 
-# Riot's internal champion IDs don't always match Data Dragon's display names
-champion_name_fixes <- c(
-  "JarvanIV"    = "Jarvan IV",
-  "DrMundo"     = "Dr. Mundo",
-  "Khazix"      = "Kha'Zix",
-  "KogMaw"      = "Kog'Maw",
-  "MissFortune" = "Miss Fortune",
-  "Chogath"     = "Cho'Gath"
-)
-
 # data transformations
+# champion_raw (from get_my_stats) is never renamed to "champion" here, so there's nothing
+# on the my_last_10 side to collide with champ_roles$champion -- the clean display name
+# comes in cleanly from the join with no .x/.y suffixing.
 my_last_10 <- my_last_10 %>%
   mutate(
-    champion = recode(champion, !!!champion_name_fixes),
     day_of_week = factor(weekdays(date),
                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
     ),
     hour = factor(sprintf("%02d:00", hour(date)), levels = sprintf("%02d:00", 0:23))
   ) %>%
-  left_join(champ_roles, by = "champion")
+  left_join(champ_roles, by = c("champion_id" = "key"))
 
 # =========================================================
 # REUSABLE ANALYSIS FUNCTIONS
@@ -223,7 +245,8 @@ role_performance <- summarize_performance(my_last_10, "primary_role")
 role_heatmap_data <- build_heatmap_data(role_performance, "primary_role")
 role_performance_plot <- plot_heatmap(role_heatmap_data, "primary_role", "Role Performance Heatmap")
 
-grid.arrange(champion_performance_plot, role_performance_plot, nrow = 2, heights = c(2,1))
+champion_performance_plot
+role_performance_plot
 
 # =========================================================
 # ACTIVITY PATTERNS (day of week / hour of day)
@@ -332,8 +355,8 @@ tankiness_data %>%
            size = 2.8, fontface = "italic", color = "red") +
   geom_image(aes(image = icon_url)) +
   scale_size_continuous(range = c(0.05, 0.12), name = "Games Played") +
-  scale_x_continuous(labels = comma, limits = c(10000, 70000), breaks = seq(10000, 70000, 10000)) +
-  scale_y_continuous(labels = comma, limits = c(5000, 85000), breaks = seq(5000, 85000, 20000)) +
+  scale_x_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
+  scale_y_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
   labs(
     title = "ARAM Tankiness Index",
     subtitle = "Average damage taken vs. mitigated per game (dashed lines = averages)",
@@ -345,112 +368,3 @@ tankiness_data %>%
     panel.grid.minor = element_blank(),
     plot.title = element_text(face = "bold", size = 14)
   )
-
-# =========================================================
-# ARAM DEATH HEATMAP - MULTI-MAP (Howling Abyss / Koeshin's Crossing / Butcher's Bridge)
-# =========================================================
-
-# Pull your death locations from a match's timeline (separate endpoint, separate API call per match)
-get_death_locations <- function(match_id, puuid, region) {
-  Sys.sleep(1.2)
-  
-  url <- sprintf("https://%s.api.riotgames.com/lol/match/v5/matches/%s/timeline", region, match_id)
-  timeline <- riot_get(url)
-  
-  # map puuid -> participantId for this specific match
-  my_participant_id <- timeline$info$participants %>%
-    filter(puuid == !!puuid) %>%
-    pull(participantId)
-  
-  if (length(my_participant_id) == 0) return(tibble())
-  
-  all_events <- map_dfr(timeline$info$frames$events, bind_rows)
-  
-  all_events %>%
-    filter(type == "CHAMPION_KILL", victimId == my_participant_id) %>%
-    transmute(
-      match_id,
-      timestamp_min = round(timestamp / 60000, 1),
-      x = position.x,
-      y = position.y
-    )
-}
-
-# Only pull timelines for ARAM matches (skip the API cost for Summoner's Rift, etc.)
-aram_match_ids <- my_last_10 %>%
-  filter(game_mode == "ARAM", win != "Remake") %>%
-  pull(match_id)
-
-death_data <- map_dfr(aram_match_ids, get_death_locations, puuid = puuid, region = region)
-
-# gameModeMutators tells us which of the 3 ARAM map skins was used.
-# NA (no mutator) = classic Howling Abyss, per the pattern observed so far.
-determine_map_name <- function(mutator) {
-  case_when(
-    is.na(mutator) ~ "Howling Abyss",
-    str_detect(mutator, regex("bloom|koeshin", ignore_case = TRUE)) ~ "Koeshin's Crossing",
-    str_detect(mutator, regex("bilgewater|butcher", ignore_case = TRUE)) ~ "Butcher's Bridge",
-    TRUE ~ "Unknown"  # catch-all in case the mutator string doesn't match a known pattern
-  )
-}
-
-my_last_10 <- my_last_10 %>%
-  mutate(map_name = determine_map_name(mutator))
-
-# All 3 skins share the same underlying map12 folder/coordinate system -
-# only the background image differs
-map_config <- list(
-  "Howling Abyss" = list(
-    image_url = "https://raw.communitydragon.org/pbe/game/assets/maps/info/map12/2dlevelminimap.png"
-  ),
-  "Koeshin's Crossing" = list(
-    image_url = "https://raw.communitydragon.org/pbe/game/assets/maps/info/map12/2dlevelminimap_bloom.png"
-  ),
-  "Butcher's Bridge" = list(
-    image_url = "https://raw.communitydragon.org/pbe/game/assets/maps/info/map12/2dlevelminimap_bilgewater2.png"
-  )
-)
-map_xmin <- -28; map_xmax <- 12849
-map_ymin <- -19; map_ymax <- 12858
-
-# Join map_name (derived from match-level data) into your per-death rows
-match_map_lookup <- my_last_10 %>% select(match_id, map_name)
-
-death_data <- death_data %>%
-  left_join(match_map_lookup, by = "match_id")
-
-# Render one heatmap per map skin you've actually played on
-plot_death_heatmap_by_skin <- function(death_data, target_map_name) {
-  cfg <- map_config[[target_map_name]]
-  if (is.null(cfg)) return(invisible(NULL))  # skip "Unknown" or unmapped skins
-  
-  map_deaths <- death_data %>% filter(map_name == target_map_name)
-  if (nrow(map_deaths) == 0) return(invisible(NULL))
-  
-  tmp_file <- tempfile(fileext = ".png")
-  download.file(cfg$image_url, destfile = tmp_file, mode = "wb")
-  map_img <- readPNG(tmp_file)
-  
-  ggplot(map_deaths, aes(x = x, y = y)) +
-    annotation_custom(rasterGrob(map_img, width = unit(1, "npc"), height = unit(1, "npc")),
-                      xmin = map_xmin, xmax = map_xmax, ymin = map_ymin, ymax = map_ymax) +
-    geom_point(color = "red", size = 1.5, alpha = 0.6) +
-    coord_fixed(xlim = c(map_xmin, map_xmax), ylim = c(map_ymin, map_ymax)) +
-    labs(title = paste("Death Heatmap -", target_map_name), x = NULL, y = NULL) +
-    theme_void() +
-    theme(plot.title = element_text(face = "bold", hjust = 0.5))
-}
-
-# Loop over whichever skins actually show up in your data
-maps_played <- unique(death_data$map_name)
-death_heatmaps <- map(maps_played, ~ plot_death_heatmap_by_skin(death_data, .x)) %>%
-  set_names(maps_played) %>%
-  compact()  # drop any NULLs (e.g. "Unknown" or zero-death maps)
-
-death_heatmaps  # print/inspect each; or grid.arrange(grobs = death_heatmaps, ncol = 1) to stack them
-
-grid.arrange(
-  grobs = death_heatmaps,             # list of ggplot objects -- grid.arrange accepts this directly
-  ncol = length(death_heatmaps),      # side-by-side, one column per map you've played
-  top = "ARAM Death Heatmaps by Map"  # shared title across the whole arrangement
-)
