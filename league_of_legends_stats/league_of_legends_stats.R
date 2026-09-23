@@ -15,7 +15,7 @@ library(stringr)
 
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
-api_key      <- ""
+api_key      <- Sys.getenv("RIOT_API_KEY")
 game_name    <- "Tickleeeeeee"
 tag_line     <- "420"
 region       <- "americas"
