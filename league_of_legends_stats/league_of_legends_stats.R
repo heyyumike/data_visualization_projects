@@ -20,6 +20,12 @@ game_name    <- "Tickleeeeeee"
 tag_line     <- "420"
 region       <- "americas"
 
+# 2026 date range in epoch seconds (UTC)
+start_time <- as.numeric(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"))
+end_time   <- as.numeric(as.POSIXct("2026-12-31 23:59:59", tz = "UTC"))
+
+ARAM_QUEUE_ID <- 450  # used to filter match IDs server-side before fetching full match details
+
 # =========================================================
 # RIOT API HELPERS
 # =========================================================
@@ -94,12 +100,8 @@ account_url <- sprintf(
 )
 puuid <- riot_get(account_url)$puuid
 
-# 2026 date range in epoch seconds (UTC)
-start_time <- as.numeric(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"))
-end_time   <- as.numeric(as.POSIXct("2026-12-31 23:59:59", tz = "UTC"))
-
-# Page through ALL match IDs in the date range (single calls cap out at 100 results)
-get_all_match_ids <- function(puuid, region, start_time, end_time) {
+# page through all match IDs within date range but only fetch match details for ARAM games
+get_all_match_ids <- function(puuid, region, start_time, end_time, queue = NULL) {
   all_ids <- character(0)
   start <- 0
   count <- 100
@@ -108,7 +110,8 @@ get_all_match_ids <- function(puuid, region, start_time, end_time) {
     url <- sprintf(
       paste0(
         "https://%s.api.riotgames.com/lol/match/v5/matches/by-puuid/%s/ids",
-        "?startTime=%d&endTime=%d&start=%d&count=%d"
+        "?startTime=%d&endTime=%d&start=%d&count=%d",
+        if (!is.null(queue)) sprintf("&queue=%d", queue) else ""
       ),
       region, puuid, as.integer(start_time), as.integer(end_time), start, count
     )
@@ -125,12 +128,12 @@ get_all_match_ids <- function(puuid, region, start_time, end_time) {
   all_ids
 }
 
-match_ids <- get_all_match_ids(puuid, region, start_time, end_time)
-length(match_ids)  # sanity check: how many 2026 games you played
+match_ids <- get_all_match_ids(puuid, region, start_time, end_time, queue = ARAM_QUEUE_ID)
+length(match_ids)  # sanity check: how many 2026 ARAM games you played
 
-# NOTE: kept as `my_last_10` so every function/plot built downstream still works unchanged --
-# this now holds your FULL 2026 match history, not just the last n_matches.
-my_last_10 <- map_dfr(match_ids, get_my_stats, puuid = puuid, region = region)
+# match history
+match_history <- map_dfr(match_ids, get_my_stats, puuid = puuid, region = region) %>%
+  filter(win != "Remake", game_mode == "ARAM")
 
 # =========================================================
 # CHAMPION ROLES (Data Dragon)
@@ -148,10 +151,7 @@ champ_roles <- champ_data$data %>%
                    icon_url = paste0("https://ddragon.leagueoflegends.com/cdn/", patch, "/img/champion/", .x$id, ".png")))
 
 # data transformations
-# champion_raw (from get_my_stats) is never renamed to "champion" here, so there's nothing
-# on the my_last_10 side to collide with champ_roles$champion -- the clean display name
-# comes in cleanly from the join with no .x/.y suffixing.
-my_last_10 <- my_last_10 %>%
+match_history <- match_history %>%
   mutate(
     day_of_week = factor(weekdays(date),
                          levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -177,10 +177,11 @@ stat_order <- c(
 
 pct_stats <- c("win_rate", "damage_share_pct", "kill_participation_pct")
 
+MIN_GAMES_FOR_HEATMAP <- 2  # drop one-off picks so a single fluke game doesn't dominate a row
+
 # Summarize win rate, KDA, damage share, etc. grouped by any column (champion, primary_role, ...)
-summarize_performance <- function(df, group_col) {
+summarize_performance <- function(df, group_col, min_games = 1) {
   df %>%
-    filter(win != "Remake") %>%
     group_by(.data[[group_col]]) %>%
     summarise(
       games_played = n(),
@@ -192,7 +193,8 @@ summarize_performance <- function(df, group_col) {
                                        quadra_kills * 3 + penta_kills * 4) / games_played,
       avg_game_duration = mean(game_duration_min),
       .groups = "drop"
-    )
+    ) %>%
+    filter(games_played >= min_games)
 }
 
 # Reshape a performance summary into long format, scaled per-stat for heatmap coloring
@@ -237,11 +239,11 @@ plot_heatmap <- function(heatmap_data, group_col, title) {
 # BUILD + PLOT: CHAMPION AND ROLE HEATMAPS
 # =========================================================
 
-champion_performance <- summarize_performance(my_last_10, "champion")
+champion_performance <- summarize_performance(match_history, "champion", min_games = MIN_GAMES_FOR_HEATMAP)
 champion_heatmap_data <- build_heatmap_data(champion_performance, "champion")
 champion_performance_plot <- plot_heatmap(champion_heatmap_data, "champion", "Champion Performance Heatmap")
 
-role_performance <- summarize_performance(my_last_10, "primary_role")
+role_performance <- summarize_performance(match_history, "primary_role")  
 role_heatmap_data <- build_heatmap_data(role_performance, "primary_role")
 role_performance_plot <- plot_heatmap(role_heatmap_data, "primary_role", "Role Performance Heatmap")
 
@@ -255,7 +257,6 @@ role_performance_plot
 # Summarize games played, win rate, and W-L record for any time grouping
 summarize_activity <- function(df, group_col) {
   df %>%
-    filter(win != "Remake") %>%
     group_by(.data[[group_col]]) %>%
     summarise(
       games_played = n(),
@@ -313,10 +314,10 @@ plot_activity <- function(summary_df, x_col, title, x_lab, flip = FALSE) {
 # =========================================================
 
 # hourly/day of week data models/plots
-day_activity <- build_activity_data(my_last_10, "day_of_week")
+day_activity <- build_activity_data(match_history, "day_of_week")
 daily_activity_plot <- plot_activity(day_activity, "day_of_week", "Daily Activity Pattern", "Day of Week")
 
-hour_activity <- summarize_activity(my_last_10, "hour")
+hour_activity <- summarize_activity(match_history, "hour")
 hourly_activity_plot <- plot_activity(hour_activity, "hour", "Hourly Activity Pattern", "Hour of Day", flip = TRUE)
 
 grid.arrange(daily_activity_plot, hourly_activity_plot, nrow = 2)
@@ -325,46 +326,51 @@ grid.arrange(daily_activity_plot, hourly_activity_plot, nrow = 2)
 # ARAM TANKINESS INDEX (damage taken vs. mitigated per game)
 # =========================================================
 
-tankiness_data <- my_last_10 %>% 
-  filter(win != "Remake") %>%
-  group_by(champion) %>%
-  summarise(
-    games_played = n(),
-    avg_damage_taken = mean(damage_taken),
-    avg_damage_mitigated = mean(damage_mitigated),
-    icon_url = first(icon_url),
-    .groups = "drop"
-  ) %>%
-  filter(games_played >= 2)  # drop one-off picks so a single fluke game doesn't dominate
+build_tankiness_data <- function(df, min_games = MIN_GAMES_FOR_HEATMAP) {
+  df %>%
+    group_by(champion) %>%
+    summarise(
+      games_played = n(),
+      avg_damage_taken = mean(damage_taken),
+      avg_damage_mitigated = mean(damage_mitigated),
+      icon_url = first(icon_url),
+      .groups = "drop"
+    ) %>%
+    filter(games_played >= min_games)
+}
 
-tankiness_data %>%
-  ggplot(aes(x = avg_damage_taken, y = avg_damage_mitigated)) +
-  geom_vline(xintercept = mean(tankiness_data$avg_damage_taken), linetype = "dashed", color = "black") +
-  geom_hline(yintercept = mean(tankiness_data$avg_damage_mitigated), linetype = "dashed", color = "black") +
-  annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.5,
-           label = "Tanks / Frontliners\n(high taken, high mitigated)",
-           size = 2.8, fontface = "italic", color = "red") +
-  annotate("text", x = Inf, y = -Inf, hjust = 1.05, vjust = -0.8,
-           label = "Exposed / Squishy\n(high taken, low mitigated)",
-           size = 2.8, fontface = "italic", color = "red") +
-  annotate("text", x = -Inf, y = Inf, hjust = -0.05, vjust = 1.5,
-           label = "Passively Tanky\n(low taken, high mitigated)",
-           size = 2.8, fontface = "italic", color = "red") +
-  annotate("text", x = -Inf, y = -Inf, hjust = -0.05, vjust = -0.8,
-           label = "Backline / Low Exposure\n(low taken, low mitigated)",
-           size = 2.8, fontface = "italic", color = "red") +
-  geom_image(aes(image = icon_url)) +
-  scale_size_continuous(range = c(0.05, 0.12), name = "Games Played") +
-  scale_x_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
-  scale_y_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
-  labs(
-    title = "ARAM Tankiness Index",
-    subtitle = "Average damage taken vs. mitigated per game (dashed lines = averages)",
-    x = "Avg Damage Taken per Game",
-    y = "Avg Damage Mitigated per Game"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    panel.grid.minor = element_blank(),
-    plot.title = element_text(face = "bold", size = 14)
-  )
+plot_tankiness_index <- function(tankiness_data) {
+  ggplot(tankiness_data, aes(x = avg_damage_taken, y = avg_damage_mitigated)) +
+    geom_vline(xintercept = mean(tankiness_data$avg_damage_taken), linetype = "dashed", color = "black") +
+    geom_hline(yintercept = mean(tankiness_data$avg_damage_mitigated), linetype = "dashed", color = "black") +
+    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.5,
+             label = "Tanks / Frontliners\n(high taken, high mitigated)",
+             size = 2.8, fontface = "italic", color = "red") +
+    annotate("text", x = Inf, y = -Inf, hjust = 1.05, vjust = -0.8,
+             label = "Exposed / Squishy\n(high taken, low mitigated)",
+             size = 2.8, fontface = "italic", color = "red") +
+    annotate("text", x = -Inf, y = Inf, hjust = -0.05, vjust = 1.5,
+             label = "Passively Tanky\n(low taken, high mitigated)",
+             size = 2.8, fontface = "italic", color = "red") +
+    annotate("text", x = -Inf, y = -Inf, hjust = -0.05, vjust = -0.8,
+             label = "Backline / Low Exposure\n(low taken, low mitigated)",
+             size = 2.8, fontface = "italic", color = "red") +
+    geom_image(aes(image = icon_url)) +
+    scale_size_continuous(range = c(0.05, 0.12), name = "Games Played") +
+    scale_x_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
+    scale_y_continuous(labels = comma, limits = c(0, NA), breaks = scales::breaks_pretty(n = 8)) +
+    labs(
+      title = "ARAM Tankiness Index",
+      subtitle = "Average damage taken vs. mitigated per game (dashed lines = averages)",
+      x = "Avg Damage Taken per Game",
+      y = "Avg Damage Mitigated per Game"
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      plot.title = element_text(face = "bold", size = 14)
+    )
+}
+
+tankiness_data <- build_tankiness_data(match_history)
+plot_tankiness_index(tankiness_data)
