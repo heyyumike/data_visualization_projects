@@ -1,4 +1,14 @@
-.Rproj.user
+# R / RStudio
+.Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
+
+# API credentials
+.Renviron
+
+# macOS
+.DS_Store
+
+# TV shows project data
+tv_shows_webscraping/*.tsv

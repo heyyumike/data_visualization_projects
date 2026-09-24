@@ -1,0 +1,3 @@
+RIOT_API_KEY=your_riot_api_key_here
+STRAVA_CLIENT_ID=your_strava_client_id_here
+STRAVA_CLIENT_SECRET=your_strava_client_secret_here

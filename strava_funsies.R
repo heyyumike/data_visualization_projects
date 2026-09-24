@@ -6,8 +6,8 @@ library(grid)
 library(ggtext)
 
 # initiate strava API instance based on user-based credentials
-strava_key <- 'KEY'
-strava_secret <- 'SECRET'
+strava_key <- Sys.getenv("STRAVA_KEY")
+strava_secret <- Sys.getenv("STRAVA_SECRET")
 
 app <- oauth_app("strava", strava_key, strava_secret)
 
