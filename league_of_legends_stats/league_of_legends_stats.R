@@ -12,6 +12,7 @@ library(ggimage)
 library(png)
 library(grid)
 library(stringr)
+library(zoo)
 
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
@@ -226,7 +227,11 @@ plot_heatmap <- function(heatmap_data, group_col, title) {
     geom_text(aes(label = label), color = "black", size = 4) +
     scale_fill_gradient(low = "#fee8c8", high = "#e34a33", name = "Relative\nPerformance") +
     scale_x_discrete(labels = stat_order) +
-    labs(title = title, x = NULL, y = NULL) +
+    labs(
+      title = title,
+      subtitle = paste0("Minimum ", MIN_GAMES_FOR_HEATMAP, " games played"),
+      x = NULL, 
+      y = NULL) +
     theme_minimal() +
     theme(
       axis.text.x = element_text(angle = 45, hjust = 1),
@@ -374,3 +379,43 @@ plot_tankiness_index <- function(tankiness_data) {
 
 tankiness_data <- build_tankiness_data(match_history)
 plot_tankiness_index(tankiness_data)
+
+# =========================================================
+# ROLLING WIN RATE (TRAILING 20 GAMES)
+# =========================================================
+
+# games in rolling average
+roll_window <- 30 
+
+# creating new dataframe using match_history and adding cumulative metrics and rolling win rates 
+rolling_win_rate_data <- match_history %>%
+  arrange(date) %>%
+  mutate(
+    win_flag = if_else(win == "Victory", 1, 0),
+    cumulative_matches = row_number(),
+    cumulative_win_rate = cummean(win_flag),
+    rolling_win_rate = rollapply(
+      win_flag, width = roll_window, FUN = mean,
+      align = "right", fill = NA
+    )
+  )
+
+ggplot(rolling_win_rate_data, aes(x = date)) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +
+  geom_line(aes(y = cumulative_win_rate), color = "grey60", linewidth = 0.6) +
+  geom_line(aes(y = rolling_win_rate), color = "#2b6cb0", linewidth = 0.9, na.rm = TRUE) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b") +
+  labs(
+    title = "ARAM Win Rate — 2026",
+    subtitle = paste0("Grey = cumulative win rate | Blue = rolling ", roll_window, "-game win rate"),
+    x = NULL,
+    y = "Win rate",
+    caption = paste0("n = ", nrow(rolling_win_rate_data), " games")
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+  
