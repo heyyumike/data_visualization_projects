@@ -53,6 +53,12 @@ get_my_stats <- function(match_id, puuid, region) {
     filter(teamId == my_team_id) %>%
     summarise(damage = sum(totalDamageDealtToChampions), kills = sum(kills))
   
+  # opponent champions for this match
+  opponent_ids <- participants %>%
+    filter(teamId != my_team_id) %>%
+    pull(championId) %>%
+    as.character()
+  
   tibble(
     match_id          = match_id,
     game_mode         = match$info$gameMode,
@@ -87,7 +93,8 @@ get_my_stats <- function(match_id, puuid, region) {
     vision_score      = me$visionScore,
     damage_mitigated  = me$damageSelfMitigated,
     damage_taken      = me$totalDamageTaken,
-    game_duration_min = round(match$info$gameDuration / 60, 1)
+    game_duration_min = round(match$info$gameDuration / 60, 1),
+    opponent_champion_ids = list(opponent_ids)  # include a list that contains opponent champion IDs
   )
 }
 
@@ -229,7 +236,6 @@ plot_heatmap <- function(heatmap_data, group_col, title) {
     scale_x_discrete(labels = stat_order) +
     labs(
       title = title,
-      subtitle = paste0("Minimum ", MIN_GAMES_FOR_HEATMAP, " games played"),
       x = NULL, 
       y = NULL) +
     theme_minimal() +
@@ -417,5 +423,51 @@ ggplot(rolling_win_rate_data, aes(x = date)) +
   theme(
     plot.title = element_text(face = "bold"),
     panel.grid.minor = element_blank()
+  )
+
+# =========================================================
+# WIN RATE AGAINST OPPONENT CHAMPIONS
+# =========================================================
+
+# One row per (match, opponent champion faced), joined to a clean opponent name.
+# select() + rename() on champ_roles avoids the champion/champion collision from before --
+# only pulling the two columns actually needed here.
+matchup_data <- match_history %>%
+  select(match_id, my_champion = champion, win, opponent_champion_ids) %>%
+  unnest_longer(opponent_champion_ids) %>%
+  left_join(
+    champ_roles %>% select(opponent_champion = champion, opponent_role = primary_role, key),
+    by = c("opponent_champion_ids" = "key")
+  )
+
+opponent_win_rates <- matchup_data %>%
+  group_by(opponent_champion, opponent_role) %>%
+  summarise(
+    games_faced = n(),
+    wins = sum(win == "Victory"),
+    win_rate = wins / games_faced,
+    .groups = "drop"
+  ) %>%
+  filter(games_faced >= MIN_GAMES_FOR_HEATMAP) %>%
+  arrange(desc(win_rate))
+
+# win rate vs. opponent champions but faceted by champion role so champions don't cram onto one axis 
+opponent_win_rates %>%
+  mutate(opponent_champion = fct_reorder(opponent_champion, win_rate)) %>%
+  ggplot(aes(x = opponent_champion, y = win_rate, fill = win_rate)) +
+  geom_col(color = "black", linewidth = 0.2) +
+  geom_text(aes(label = paste0(percent(win_rate, accuracy = 1), " (", games_faced, ")")),
+            hjust = -0.05, size = 2.5) +
+  coord_flip() +
+  facet_wrap(~ opponent_role, scales = "free_y", ncol = 2) +
+  scale_fill_gradient2(low = "#e34a33", mid = "grey85", high = "#2c7fb8", midpoint = 0.5,
+                       limits = c(0, 1), labels = scales::percent, name = "Win Rate") +
+  scale_y_continuous(labels = percent, limits = c(0, 1.15), expand = c(0, 0)) +
+  labs(title = "Win Rate vs. Opponent Champions, by Role", x = NULL, y = "Win Rate") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14),
+    strip.text = element_text(face = "bold")
   )
   
