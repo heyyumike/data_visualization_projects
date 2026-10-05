@@ -6,6 +6,7 @@
 
 # API credentials
 .Renviron
+league_of_legends_stats/lol_stats_cache.sqlite
 
 # macOS
 .DS_Store
