@@ -13,6 +13,8 @@ library(png)
 library(grid)
 library(stringr)
 library(zoo)
+library(DBI)
+library(RSQLite)
 
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
@@ -26,6 +28,13 @@ start_time <- as.numeric(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"))
 end_time   <- as.numeric(as.POSIXct("2026-12-31 23:59:59", tz = "UTC"))
 
 ARAM_QUEUE_ID <- 450  # used to filter match IDs server-side before fetching full match details
+
+PROJECT_DIR <- "league_of_legends_stats"
+dir.create(PROJECT_DIR, showWarnings = FALSE, recursive = TRUE)
+
+DB_PATH          <- file.path(PROJECT_DIR, "lol_stats_cache.sqlite")
+CHAMP_CACHE_PATH <- file.path(PROJECT_DIR, "champ_roles_cache.rds")
+CHAMP_CACHE_MAX_AGE_DAYS <- 1
 
 # =========================================================
 # RIOT API HELPERS
@@ -60,47 +69,114 @@ get_my_stats <- function(match_id, puuid, region) {
     as.character()
   
   tibble(
-    match_id          = match_id,
-    game_mode         = match$info$gameMode,
-    mutator           = if (length(match$info$gameModeMutators) == 0) {
+    match_id              = match_id,
+    puuid                 = puuid,
+    game_mode             = match$info$gameMode,
+    mutator               = if (length(match$info$gameModeMutators) == 0) {
       NA_character_
     } else {
       paste(match$info$gameModeMutators, collapse = ", ")
     },
-    map_id            = match$info$mapId,
-    date              = as.POSIXct(match$info$gameStartTimestamp / 1000, origin = "1970-01-01"),
-    champion_raw      = me$championName,          # raw internal name from the match API (kept for reference/debugging)
-    champion_id       = as.character(me$championId),  # numeric champion id -- join key into Data Dragon
-    win               = case_when(
+    map_id                = match$info$mapId,
+    date                  = as.POSIXct(match$info$gameStartTimestamp / 1000, origin = "1970-01-01"),
+    champion_raw          = me$championName,          # raw internal name from the match API (kept for reference/debugging)
+    champion_id           = as.character(me$championId),  # numeric champion id -- join key into Data Dragon
+    win                   = case_when(
       me$gameEndedInEarlySurrender ~ "Remake",
       me$win ~ "Victory",
       TRUE ~ "Defeat"
     ),
-    kills             = me$kills,
-    deaths            = me$deaths,
-    assists           = me$assists,
-    team_kills        = team_totals$kills,
-    double_kills      = me$doubleKills,
-    triple_kills      = me$tripleKills,
-    quadra_kills      = me$quadraKills,
-    penta_kills       = me$pentaKills,
-    kda               = round((me$kills + me$assists) / pmax(me$deaths, 1), 2),
-    cs                = me$totalMinionsKilled + me$neutralMinionsKilled,
-    gold              = me$goldEarned,
-    damage_dealt      = me$totalDamageDealtToChampions,
-    team_damage       = team_totals$damage,
-    damage_share_pct  = round(me$totalDamageDealtToChampions / team_totals$damage * 100, 1),
-    vision_score      = me$visionScore,
-    damage_mitigated  = me$damageSelfMitigated,
-    damage_taken      = me$totalDamageTaken,
-    game_duration_min = round(match$info$gameDuration / 60, 1),
-    opponent_champion_ids = list(opponent_ids)  # include a list that contains opponent champion IDs
+    kills                 = me$kills,
+    deaths                = me$deaths,
+    assists               = me$assists,
+    team_kills            = team_totals$kills,
+    double_kills          = me$doubleKills,
+    triple_kills          = me$tripleKills,
+    quadra_kills          = me$quadraKills,
+    penta_kills           = me$pentaKills,
+    kda                   = round((me$kills + me$assists) / pmax(me$deaths, 1), 2),
+    cs                    = me$totalMinionsKilled + me$neutralMinionsKilled,
+    gold                  = me$goldEarned,
+    damage_dealt          = me$totalDamageDealtToChampions,
+    team_damage           = team_totals$damage,
+    damage_share_pct      = round(me$totalDamageDealtToChampions / team_totals$damage * 100, 1),
+    vision_score          = me$visionScore,
+    damage_mitigated      = me$damageSelfMitigated,
+    damage_taken          = me$totalDamageTaken,
+    game_duration_min     = round(match$info$gameDuration / 60, 1),
+    opponent_champion_ids = paste(opponent_ids, collapse = ",")
   )
 }
 
 # =========================================================
-# PULL MATCH DATA
+# PULL MATCH DATA (with local SQLite caching)
 # =========================================================
+
+# Open (or create) a local cache DB. Table is keyed on (match_id, puuid), so multiple
+# summoners can share one file without colliding.
+init_db <- function(db_path = DB_PATH) {
+  con <- dbConnect(RSQLite::SQLite(), db_path)
+  
+  if (!dbExistsTable(con, "matches")) {
+    dbExecute(con, "
+      CREATE TABLE matches (
+        match_id TEXT,
+        puuid TEXT,
+        game_mode TEXT,
+        mutator TEXT,
+        map_id INTEGER,
+        date TEXT,
+        champion_raw TEXT,
+        champion_id TEXT,
+        win TEXT,
+        kills INTEGER,
+        deaths INTEGER,
+        assists INTEGER,
+        team_kills INTEGER,
+        double_kills INTEGER,
+        triple_kills INTEGER,
+        quadra_kills INTEGER,
+        penta_kills INTEGER,
+        kda REAL,
+        cs INTEGER,
+        gold INTEGER,
+        damage_dealt REAL,
+        team_damage REAL,
+        damage_share_pct REAL,
+        vision_score INTEGER,
+        damage_mitigated REAL,
+        damage_taken REAL,
+        game_duration_min REAL,
+        opponent_champion_ids TEXT,
+        PRIMARY KEY (match_id, puuid)
+      )
+    ")
+  }
+  
+  con
+}
+
+# Diffs the full match ID list against what's already cached for this puuid, fetches
+# ONLY the new ones, writes each to the DB as it comes in (crash-safe -- a partial pull
+# still leaves everything fetched so far saved), then returns the complete set.
+get_match_history_cached <- function(con, puuid, region, all_match_ids) {
+  cached_ids <- dbGetQuery(con, "SELECT match_id FROM matches WHERE puuid = ?", params = list(puuid))$match_id
+  new_ids <- setdiff(all_match_ids, cached_ids)
+  
+  message(sprintf("%d matches cached, %d new to fetch", length(cached_ids), length(new_ids)))
+  
+  for (mid in new_ids) {
+    new_row <- get_my_stats(mid, puuid, region)
+    dbWriteTable(con, "matches", new_row, append = TRUE)
+  }
+  
+  dbGetQuery(con, "SELECT * FROM matches WHERE puuid = ?", params = list(puuid)) %>%
+    as_tibble() %>%
+    mutate(
+      date = as.POSIXct(as.numeric(date), origin = "1970-01-01", tz = "UTC"),
+      opponent_champion_ids = str_split(opponent_champion_ids, ",")  # back to a list-column
+    )
+}
 
 account_url <- sprintf(
   "https://%s.api.riotgames.com/riot/account/v1/accounts/by-riot-id/%s/%s",
@@ -140,23 +216,36 @@ match_ids <- get_all_match_ids(puuid, region, start_time, end_time, queue = ARAM
 length(match_ids)  # sanity check: how many 2026 ARAM games you played
 
 # match history
-match_history <- map_dfr(match_ids, get_my_stats, puuid = puuid, region = region) %>%
+con <- init_db()
+match_history <- get_match_history_cached(con, puuid, region, match_ids) %>%
   filter(win != "Remake", game_mode == "ARAM")
+dbDisconnect(con)
 
 # =========================================================
 # CHAMPION ROLES (Data Dragon)
 # =========================================================
 
-patch <- fromJSON("https://ddragon.leagueoflegends.com/api/versions.json")[1]
-champ_data <- fromJSON(sprintf(
-  "https://ddragon.leagueoflegends.com/cdn/%s/data/en_US/champion.json", patch
-))
+champ_cache_is_fresh <- file.exists(CHAMP_CACHE_PATH) &&
+  difftime(Sys.time(), file.info(CHAMP_CACHE_PATH)$mtime, units = "days") < CHAMP_CACHE_MAX_AGE_DAYS
 
-champ_roles <- champ_data$data %>%
-  map_dfr(~ tibble(champion = .x$name, 
-                   key = .x$key, 
-                   primary_role = .x$tags[1],
-                   icon_url = paste0("https://ddragon.leagueoflegends.com/cdn/", patch, "/img/champion/", .x$id, ".png")))
+if (champ_cache_is_fresh) {
+  cached <- readRDS(CHAMP_CACHE_PATH)
+  patch <- cached$patch
+  champ_roles <- cached$champ_roles
+} else {
+  patch <- fromJSON("https://ddragon.leagueoflegends.com/api/versions.json")[1]
+  champ_data <- fromJSON(sprintf(
+    "https://ddragon.leagueoflegends.com/cdn/%s/data/en_US/champion.json", patch
+  ))
+  
+  champ_roles <- champ_data$data %>%
+    map_dfr(~ tibble(champion = .x$name, 
+                     key = .x$key, 
+                     primary_role = .x$tags[1],
+                     icon_url = paste0("https://ddragon.leagueoflegends.com/cdn/", patch, "/img/champion/", .x$id, ".png")))
+  
+  saveRDS(list(patch = patch, champ_roles = champ_roles), CHAMP_CACHE_PATH)
+}
 
 # data transformations
 match_history <- match_history %>%
