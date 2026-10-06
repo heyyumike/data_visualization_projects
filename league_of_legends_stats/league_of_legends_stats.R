@@ -19,8 +19,8 @@ library(RSQLite)
 ### GRABBING LEAGUE OF LEGENDS MATCH DETAILS
 # config
 api_key      <- Sys.getenv("RIOT_API_KEY")
-game_name    <- "Tickleeeeeee"
-tag_line     <- "420"
+game_name    <- Sys.getenv("SUMMONER_GAME_NAME")
+tag_line     <- Sys.getenv("SUMMONER_TAG_LINE")
 region       <- "americas"
 
 # 2026 date range in epoch seconds (UTC)
